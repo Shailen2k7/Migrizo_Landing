@@ -8281,3 +8281,56 @@ html:not(.js-reveal) .mx-strike {
 .tq:not(.tq--lead) blockquote.tq-quote {
   padding-right: 38px;
 }
+
+/* ==========================================================================
+   v14: privacy links and cookie choice (UK and Europe only)
+   ========================================================================== */
+.consent a,
+.footer a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.consent a:hover,
+.footer a:hover {
+  text-decoration-thickness: 2px;
+}
+.cookie {
+  position: fixed;
+  z-index: 70;
+  left: 16px;
+  right: 16px;
+  bottom: calc(80px + env(safe-area-inset-bottom));
+  max-width: 420px;
+  padding: 16px 18px;
+  background: #fff;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 18px 40px -16px rgba(12, 20, 51, 0.35);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.cookie p {
+  margin: 0 0 12px;
+}
+.cookie a {
+  color: inherit;
+  text-decoration: underline;
+}
+.cookie-btns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.cookie-btns .btn {
+  --h: 44px;
+  min-height: 44px;
+}
+@media (min-width: 900px) {
+  .cookie {
+    left: 24px;
+    right: auto;
+    bottom: 24px;
+  }
+}

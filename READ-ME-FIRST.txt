@@ -1,0 +1,29 @@
+Files to upload to GitHub (same folders as in your repository)
+==============================================================
+
+Upload / replace these 6 files, keeping the same folder paths:
+
+  .env.example
+  next.config.mjs
+  README.md
+  app/layout.tsx
+  app/global-talent-visa-assessment/GtvLanding.tsx
+  app/global-talent-visa-assessment/gtv.css
+
+And DELETE this 1 file from GitHub (if it is still there):
+
+  app/page.tsx
+
+How (GitHub website):
+1. Open your repository on github.com.
+2. Add file > Upload files, then drag in the contents of this folder
+   (the "app" folder and the 3 files at the top). GitHub keeps the folder paths.
+   Do not upload this READ-ME-FIRST.txt file.
+3. Commit changes.
+4. Open app/page.tsx on GitHub > the ... menu (or bin icon) > Delete file > Commit.
+
+Then in Netlify:
+- Site configuration > Environment variables > add
+  NEXT_PUBLIC_GTM_ID = your Google Tag Manager ID (e.g. GTM-ABC1234)
+- Netlify redeploys automatically after the GitHub commit. If you add the GTM ID
+  afterwards, go to Deploys > Trigger deploy so it takes effect.

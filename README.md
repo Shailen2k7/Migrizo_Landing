@@ -1,6 +1,6 @@
 # Migrizo · Global Talent assessment landing page
 
-Page: `/global-talent-visa-assessment` (root `/` redirects there). Next.js 15 App Router.
+Page: `/` and `/global-talent-visa-assessment` show the same landing page (a rewrite in `next.config.mjs`, no redirect, so ad click IDs are kept). Next.js 15 App Router.
 
 ## Files
 - `app/global-talent-visa-assessment/GtvLanding.tsx`: the page (one client component). **CONFIG block at the top**: booking URL, WhatsApp number, founder photo.
@@ -28,8 +28,41 @@ Or drag the folder's contents into the repository page on github.com (Add file, 
 2. Netlify: import the repo. Build settings come from `netlify.toml`.
 3. Netlify env vars: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (optional `GTV_LEAD_WEBHOOK_URL`, `GTV_LEAD_WEBHOOK_SECRET`).
 4. Domain: add the subdomain in Netlify, then a CNAME at your DNS provider pointing to the Netlify site.
-5. Add Google Tag Manager to `app/layout.tsx` and create triggers for the dataLayer events:
-   `gtv_assessment_start`, `gtv_assessment_complete` (score), `gtv_qualified_lead`, `gtv_call_booking_click`, `gtv_whatsapp_click`, `gtv_profile_chip`.
+5. Netlify env var `NEXT_PUBLIC_GTM_ID` = your GTM container ID (e.g. `GTM-ABC1234`), then redeploy. Without it no Google tag loads.
+
+## Google Ads and YouTube Ads setup (in Google Tag Manager)
+Already built into the page:
+- Google Tag Manager loads from `NEXT_PUBLIC_GTM_ID` (`app/layout.tsx`).
+- Consent mode v2: UK, EEA and Switzerland start with ad cookies denied (by IP), everywhere else granted.
+  Visitors with a European time zone see a small Accept / Reject banner; the choice is remembered.
+  `url_passthrough` and `ads_data_redaction` are on, so the gclid survives even when cookies are refused.
+- gclid, gbraid, wbraid and UTMs are captured and saved with every lead in Supabase (for offline conversion import).
+- Privacy policy link (https://migrizo.com/privacy) under the form, in the footer and in the banner.
+
+dataLayer events:
+| Event | When | Data |
+|---|---|---|
+| `gtv_assessment_start` | first answer | `method` |
+| `gtv_assessment_complete` | form submitted (every lead) | `score`, `band`, `lead_id`, `user_data.email`, `user_data.phone_number` |
+| `gtv_qualified_lead` | form submitted, score 60+ | same as above |
+| `gtv_call_booking_click` | booking button on the result | `score`, `location` |
+| `gtv_whatsapp_click` | any WhatsApp button | `location`, `score` |
+| `gtv_cta_click` | any "Check my score" button | `location` |
+| `gtv_profile_chip` | profile chip in the hero | `profile`, `field` |
+| `gtv_consent_update` | banner choice | `consent` |
+
+In GTM:
+1. Tag **Google tag** with your Google Ads ID (`AW-...`), trigger All Pages. Turn on "Include user-provided data from your website" and use a User-Provided Data variable: Email = Data Layer Variable `user_data.email`, Phone = `user_data.phone_number` (enhanced conversions).
+2. **Conversion Linker** tag, trigger All Pages.
+3. Data Layer Variables: `lead_id`, `score`, `user_data.email`, `user_data.phone_number`.
+4. Custom Event triggers: `gtv_assessment_complete`, `gtv_qualified_lead`, `gtv_call_booking_click`, `gtv_whatsapp_click`.
+5. **Google Ads Conversion Tracking** tags (create the conversion actions in Google Ads first):
+   - "GTV Lead" (primary) on `gtv_assessment_complete`, Transaction ID = `{{lead_id}}`.
+   - "GTV Qualified Lead" on `gtv_qualified_lead`, Transaction ID = `{{lead_id}}`.
+   - "Booking click" and "WhatsApp click" as secondary conversions.
+6. Preview in GTM, submit a test lead, check the tags fire, then Publish.
+
+Ad final URL: `https://gtv.migrizo.com/` (add `?seg=tech`, `?seg=research` or `?seg=arts` for matching headlines). Turn on auto-tagging in Google Ads.
 
 ## Local
 ```

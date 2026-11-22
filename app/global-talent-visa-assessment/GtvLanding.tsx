@@ -25,6 +25,8 @@ const CONFIG = {
   showGlance: false as boolean,
   /** Show the extra sections (refusals, myths, life in the UK, full job band, endorser strip). */
   showMoreSections: false as boolean,
+  /** Privacy policy (required by Google Ads because the form collects personal details). */
+  privacyUrl: "https://migrizo.com/privacy",
   /** Default country code shown in the WhatsApp field. */
   defaultDialCode: "+91 ",
 } as const;
@@ -80,6 +82,40 @@ function track(event: string, data: Record<string, unknown> = {}) {
   window.dataLayer = window.dataLayer || [];
   window.dataLayer.push({ event, ...data });
 }
+/** Google Tag Manager is only loaded when NEXT_PUBLIC_GTM_ID is set (see app/layout.tsx). */
+const GTM_ON = !!(process.env.NEXT_PUBLIC_GTM_ID || "").trim();
+const CONSENT_KEY = "gtv_consent";
+/** Record the visitor's cookie choice with Google consent mode v2. */
+function setConsent(granted: boolean) {
+  const v = granted ? "granted" : "denied";
+  try {
+    localStorage.setItem(CONSENT_KEY, v);
+  } catch {
+    /* storage blocked: choice applies to this page view only */
+  }
+  window.dataLayer = window.dataLayer || [];
+  // gtag() pushes the arguments object itself, which is what consent mode expects.
+  // eslint-disable-next-line prefer-rest-params
+  (function gtag(..._args: unknown[]) { (window.dataLayer as unknown[]).push(arguments); })("consent", "update", {
+    ad_storage: v,
+    ad_user_data: v,
+    ad_personalization: v,
+    analytics_storage: v,
+  });
+  track("gtv_consent_update", { consent: v });
+}
+/** E.164 phone for enhanced conversions: +, then digits only. */
+const e164 = (raw: string) => {
+  const d = raw.replace(/[^\d+]/g, "");
+  return d.startsWith("+") ? "+" + d.slice(1).replace(/\+/g, "") : "+" + d;
+};
+const newLeadId = () => {
+  try {
+    return crypto.randomUUID();
+  } catch {
+    return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  }
+};
 /** Store click ids and UTMs for the session. New ad clicks overwrite, landing info is first-touch. */
 function captureAttribution() {
   try {
@@ -591,8 +627,16 @@ function ScoreCalculator({ handleRef, reduced }: { handleRef: React.MutableRefOb
       /* network problem: still show the indicative score */
     }
     const band = scoreBand(score);
-    track("gtv_assessment_complete", { score, band });
-    if (score >= CONFIG.scoreThreshold) track("gtv_qualified_lead", { score, band });
+    // lead_id: use as the conversion's transaction ID in Google Ads so a lead is never counted twice.
+    // user_data: for Google Ads enhanced conversions (the Google tag hashes it before sending).
+    const lead = {
+      score,
+      band,
+      lead_id: newLeadId(),
+      user_data: { email: contact.email.trim().toLowerCase(), phone_number: e164(contact.whatsapp) },
+    };
+    track("gtv_assessment_complete", lead);
+    if (score >= CONFIG.scoreThreshold) track("gtv_qualified_lead", lead);
     setResult({ score, band });
     setSubmitting(false);
     interacted.current = true;
@@ -739,7 +783,12 @@ function ScoreCalculator({ handleRef, reduced }: { handleRef: React.MutableRefOb
                     aria-invalid={!!shownError("consent")}
                     aria-describedby={shownError("consent") ? "gtv-consent-err" : undefined}
                   />
-                  <span>Migrizo can contact me by email and WhatsApp about my application. No spam, unsubscribe any time.</span>
+                  <span>
+                    Migrizo can contact me by email and WhatsApp about my application. No spam, unsubscribe any time.{" "}
+                    <a href={CONFIG.privacyUrl} target="_blank" rel="noopener">
+                      Privacy policy
+                    </a>
+                  </span>
                 </label>
                 {shownError("consent") && <FieldError id="gtv-consent-err">{shownError("consent")}</FieldError>}
               </div>
@@ -1308,6 +1357,48 @@ function Faq() {
 /* ==========================================================================
    Page
    ========================================================================== */
+/**
+ * Cookie choice for UK and European visitors (consent mode v2 keeps ad cookies off for them until
+ * they accept). Shown only when GTM is on, no choice is stored yet and the visitor's time zone is
+ * in Europe. Everyone else already has measurement on by default, see app/layout.tsx.
+ */
+function CookieBanner() {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!GTM_ON) return;
+    try {
+      if (localStorage.getItem(CONSENT_KEY)) return;
+    } catch {
+      /* storage blocked: still ask */
+    }
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+    if (/^Europe\//.test(tz) || tz === "Atlantic/Reykjavik" || tz === "Atlantic/Canary" || tz === "Atlantic/Madeira" || tz === "Atlantic/Azores") setOpen(true);
+  }, []);
+  if (!open) return null;
+  const choose = (granted: boolean) => {
+    setConsent(granted);
+    setOpen(false);
+  };
+  return (
+    <div className="cookie" role="dialog" aria-label="Cookie choice" aria-live="polite">
+      <p>
+        We use cookies to measure our ads and improve this page.{" "}
+        <a href={CONFIG.privacyUrl} target="_blank" rel="noopener">
+          Privacy policy
+        </a>
+      </p>
+      <div className="cookie-btns">
+        <button type="button" className="btn btn--outline btn--sm" onClick={() => choose(false)}>
+          Reject
+        </button>
+        <button type="button" className="btn btn--navy btn--sm" onClick={() => choose(true)}>
+          Accept
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function GtvLanding({ seg }: { seg?: string }) {
   const reduced = useReducedMotion();
   useScrollReveal();
@@ -1915,6 +2006,11 @@ export default function GtvLanding({ seg }: { seg?: string }) {
                 <p>Migrizo is an immigration consultancy and not a law firm. The score is indicative only. Decisions are made by endorsing bodies and the UK Home Office. No outcome is guaranteed. Fees may change.</p>
                 <p>Migrizo is independent and not affiliated with any endorsing body or the Home Office.</p>
                 <p>© {new Date().getFullYear()} Migrizo Ventures Pvt Ltd. City and field photography from Unsplash.</p>
+                <p>
+                  <a href={CONFIG.privacyUrl} target="_blank" rel="noopener">
+                    Privacy policy
+                  </a>
+                </p>
               </div>
             </div>
           </footer>
@@ -2126,6 +2222,7 @@ export default function GtvLanding({ seg }: { seg?: string }) {
         </button>
         {waBtn("sticky_bar", "btn btn--outline", "WhatsApp")}
       </div>
+      <CookieBanner />
     </>
   );
 }
