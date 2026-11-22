@@ -48,19 +48,20 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en-GB" suppressHydrationWarning>
       <head>
-        {GTM_ID && (
+        {/* Use a ternary, not &&: an empty GTM_ID string would render a stray text node and break hydration. */}
+        {GTM_ID ? (
           <>
             <script dangerouslySetInnerHTML={{ __html: CONSENT_BOOT }} />
             <script dangerouslySetInnerHTML={{ __html: GTM_BOOT(GTM_ID) }} />
           </>
-        )}
+        ) : null}
       </head>
       <body>
-        {GTM_ID && (
+        {GTM_ID ? (
           <noscript>
             <iframe src={`https://www.googletagmanager.com/ns.html?id=${encodeURIComponent(GTM_ID)}`} height="0" width="0" style={{ display: "none", visibility: "hidden" }} />
           </noscript>
-        )}
+        ) : null}
         {children}
       </body>
     </html>

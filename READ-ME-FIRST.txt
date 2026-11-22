@@ -1,29 +1,12 @@
-Files to upload to GitHub (same folders as in your repository)
-==============================================================
+FIX: page showing only the Tower Bridge photo
+=============================================
 
-Upload / replace these 6 files, keeping the same folder paths:
+Upload this ONE file to GitHub and replace the existing one:
 
-  .env.example
-  next.config.mjs
-  README.md
   app/layout.tsx
-  app/global-talent-visa-assessment/GtvLanding.tsx
-  app/global-talent-visa-assessment/gtv.css
 
-And DELETE this 1 file from GitHub (if it is still there):
+On github.com: open your repository > open the "app" folder > Add file > Upload files >
+drag in layout.tsx from this folder's "app" folder > Commit changes.
 
-  app/page.tsx
-
-How (GitHub website):
-1. Open your repository on github.com.
-2. Add file > Upload files, then drag in the contents of this folder
-   (the "app" folder and the 3 files at the top). GitHub keeps the folder paths.
-   Do not upload this READ-ME-FIRST.txt file.
-3. Commit changes.
-4. Open app/page.tsx on GitHub > the ... menu (or bin icon) > Delete file > Commit.
-
-Then in Netlify:
-- Site configuration > Environment variables > add
-  NEXT_PUBLIC_GTM_ID = your Google Tag Manager ID (e.g. GTM-ABC1234)
-- Netlify redeploys automatically after the GitHub commit. If you add the GTM ID
-  afterwards, go to Deploys > Trigger deploy so it takes effect.
+Netlify redeploys automatically. Refresh https://gtv.migrizo.com/ after the deploy finishes
+(about 1 to 2 minutes). Do not upload this READ-ME-FIRST.txt file.
