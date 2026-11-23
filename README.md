@@ -30,6 +30,17 @@ Or drag the folder's contents into the repository page on github.com (Add file, 
 4. Domain: add the subdomain in Netlify, then a CNAME at your DNS provider pointing to the Netlify site.
 5. Netlify env var `NEXT_PUBLIC_GTM_ID` = your GTM container ID (e.g. `GTM-ABC1234`), then redeploy. Without it no Google tag loads.
 
+## Leads into the Migrizo CRM
+Set `CRM_INGEST_SECRET` in this site's Netlify env vars to the same value as `INGEST_SECRET` in the CRM's
+Netlify site, then redeploy. Every lead is then created in crm.migrizo.com through the CRM's own intake
+endpoint (`/api/ingest/meta-lead`, the one Meta ads and the website popup use): duplicate check by phone,
+today's call queue, the automatic "How it works" email, activity timeline and ingest log.
+- visa_type `gtv`; source `Google Ads` (when a gclid, gbraid or wbraid is present) or `GTV Landing Page`
+- tags `gtv-landing`, plus `gtv-qualified` for a score of 60+
+- field becomes the CRM industry; score, band, answers, LinkedIn, gclid and UTMs are in the lead's intake answers
+- the Supabase `gtv_leads` table keeps a full copy as a backup
+Optional: `CRM_INGEST_URL` (defaults to https://crm.migrizo.com/api/ingest/meta-lead).
+
 ## Google Ads and YouTube Ads setup (in Google Tag Manager)
 Already built into the page:
 - Google Tag Manager loads from `NEXT_PUBLIC_GTM_ID` (`app/layout.tsx`).

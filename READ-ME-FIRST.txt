@@ -1,12 +1,33 @@
-FIX: page showing only the Tower Bridge photo
+CONNECT LANDING PAGE LEADS TO THE MIGRIZO CRM
 =============================================
 
-Upload this ONE file to GitHub and replace the existing one:
+1. UPLOAD TO GITHUB (landing page repository), replacing the existing files:
+     app/api/gtv-lead/route.ts
+     README.md
+     .env.example
+   (If you have not uploaded app/layout.tsx from "migrizo-upload-fix" yet, upload that too.)
 
-  app/layout.tsx
+2. COPY THE CRM'S SECRET
+   Netlify > open the CRM site (crm.migrizo.com) > Site configuration >
+   Environment variables > INGEST_SECRET > copy its value.
+   (Do not paste it anywhere else, and do not change it: Make.com uses it too.)
 
-On github.com: open your repository > open the "app" folder > Add file > Upload files >
-drag in layout.tsx from this folder's "app" folder > Commit changes.
+3. ADD IT TO THE LANDING PAGE SITE
+   Netlify > open the landing page site (gtv.migrizo.com) > Site configuration >
+   Environment variables > Add a variable:
+     Key:   CRM_INGEST_SECRET
+     Value: (the value you copied)
+   Then Deploys > Trigger deploy > Deploy site.
 
-Netlify redeploys automatically. Refresh https://gtv.migrizo.com/ after the deploy finishes
-(about 1 to 2 minutes). Do not upload this READ-ME-FIRST.txt file.
+4. TEST
+   Open https://gtv.migrizo.com/ , complete the quiz with your own details.
+   Within seconds the lead appears in the CRM Leads list with:
+     Visa: GTV   Source: GTV Landing Page (or Google Ads when it came from an ad)
+     Tags: gtv-landing (+ gtv-qualified if the score is 60 or more)
+     Intake answers: score, band, experience, role, evidence, timeline, LinkedIn, gclid, UTMs
+   Delete the test lead afterwards (CRM and the gtv_leads table in Supabase).
+
+Note: new leads with an email get the CRM's automatic "How it works" email,
+same as Meta and website leads.
+
+Do not upload this READ-ME-FIRST.txt file.

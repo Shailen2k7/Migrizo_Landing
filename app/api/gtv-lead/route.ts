@@ -8,13 +8,16 @@
  * Environment variables (set in Netlify > Site configuration > Environment variables):
  *   SUPABASE_URL               https://<project-ref>.supabase.co
  *   SUPABASE_SERVICE_ROLE_KEY  server-only key. Never expose it with a NEXT_PUBLIC_ prefix.
+ *   CRM_INGEST_SECRET          the Migrizo CRM's INGEST_SECRET. When set, every lead is also created
+ *                              in the CRM (crm.migrizo.com) through its lead intake endpoint.
+ *   CRM_INGEST_URL             optional, defaults to https://crm.migrizo.com/api/ingest/meta-lead
  *   GTV_LEAD_WEBHOOK_URL       optional, e.g. a CRM or WhatsApp automation webhook
  *   GTV_LEAD_WEBHOOK_SECRET    optional, sent as X-Migrizo-Secret
  *
  * Table: see supabase/migrations/0001_gtv_leads.sql
  */
 import { NextResponse } from "next/server";
-import { calculateScore, scoreBand, QUALIFY_THRESHOLD, type Answers } from "@/lib/gtv-scoring";
+import { calculateScore, scoreBand, QUALIFY_THRESHOLD, QUESTIONS, type Answers } from "@/lib/gtv-scoring";
 
 export const runtime = "nodejs";
 
@@ -111,9 +114,10 @@ export async function POST(req: Request) {
     userAgent: str(req.headers.get("user-agent"), 300),
   };
 
-  const saved = await saveToSupabase(lead);
-  await forwardToWebhook(lead);
-  if (!saved && !process.env.GTV_LEAD_WEBHOOK_URL) {
+  // Supabase backup copy, Migrizo CRM and optional webhook run side by side.
+  // Each one is guarded, so a slow or failing destination never loses the lead elsewhere.
+  const [saved, inCrm] = await Promise.all([saveToSupabase(lead), sendToCrm(lead), forwardToWebhook(lead)]);
+  if (!saved && !inCrm && !process.env.GTV_LEAD_WEBHOOK_URL) {
     // Last resort so the lead is at least visible in Netlify function logs.
     console.error("[gtv-lead] NOT STORED", JSON.stringify(lead));
   }
@@ -215,5 +219,90 @@ async function forwardToWebhook(lead: Lead) {
   } catch (err) {
     // Never fail the visitor's request because a downstream tool is slow.
     console.error("[gtv-lead] webhook failed", err);
+  }
+}
+
+/* ==========================================================================
+   Migrizo CRM (crm.migrizo.com)
+   ==========================================================================
+   Uses the CRM's own lead intake endpoint, the same one the Meta lead ads and
+   the website popup use. So a landing page lead gets exactly the same handling:
+   duplicate check by phone, a row in Leads, today's call queue, the automatic
+   "How it works" email, the activity timeline and the ingest log.
+   No CRM code or database change is needed, and the CRM's database keys never
+   leave the CRM: this site only knows the shared INGEST_SECRET.
+
+   What the CRM receives:
+     full_name, phone (+country code), email
+     visa_type   "gtv"
+     source      "Google Ads" when the visitor came from a Google or YouTube ad,
+                 otherwise "GTV Landing Page"
+     tags        ["gtv-landing"], plus "gtv-qualified" for a score of 60 or more
+     expertise   the field label, which the CRM maps to its industry (tech, research, art)
+     everything else (score, answers, LinkedIn, gclid, UTMs) lands in the lead's
+     intake answers, readable in the lead drawer.
+   ========================================================================== */
+const label = (qid: string, id: unknown): string => {
+  const q = QUESTIONS.find((x) => x.id === qid);
+  const one = (v: string) => q?.options.find((o) => o.id === v)?.label || v;
+  if (Array.isArray(id)) return id.map((v) => one(String(v))).join(", ");
+  return id ? one(String(id)) : "";
+};
+
+async function sendToCrm(lead: Lead): Promise<boolean> {
+  const secret = process.env.CRM_INGEST_SECRET;
+  if (!secret) return false;
+  const url = process.env.CRM_INGEST_URL || "https://crm.migrizo.com/api/ingest/meta-lead";
+  const t = lead.tracking;
+  const fromGoogleAds = !!(t.gclid || t.gbraid || t.wbraid);
+  const tags = ["gtv-landing"];
+  if (lead.qualified) tags.push("gtv-qualified");
+
+  const body: Record<string, string | string[]> = {
+    token: secret,
+    full_name: lead.contact.name,
+    phone: lead.contact.whatsapp.startsWith("+") ? lead.contact.whatsapp : `+${lead.contact.whatsapp}`,
+    email: lead.contact.email,
+    visa_type: "gtv",
+    source: fromGoogleAds ? "Google Ads" : "GTV Landing Page",
+    tags,
+    form_name: "GTV assessment landing page",
+    created_time: lead.receivedAt,
+    // Mapped by the CRM to leads.industry
+    expertise: label("field", lead.answers.field),
+    // Stored as intake answers on the lead
+    gtv_score: `${lead.score}/100`,
+    gtv_band: lead.band.charAt(0).toUpperCase() + lead.band.slice(1),
+    gtv_qualified: lead.qualified ? "Yes" : "No",
+    experience: label("years", lead.answers.years),
+    current_role: label("role", lead.answers.role),
+    evidence: label("evidence", lead.answers.evidence),
+    move_timeline: label("timeline", lead.answers.timeline),
+  };
+  if (lead.contact.linkedin) body.linkedin = lead.contact.linkedin;
+  for (const k of ["gclid", "gbraid", "wbraid", "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "seg", "landing_url"]) {
+    if (t[k]) body[k] = t[k];
+  }
+  if (t.utm_campaign) body.campaign_name = t.utm_campaign;
+  if (fromGoogleAds) body.platform = "google";
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(10000),
+    });
+    const out = (await res.json().catch(() => ({}))) as { ok?: boolean; id?: string; returning?: boolean; reason?: string };
+    if (!res.ok || !out.ok) {
+      console.error("[gtv-lead] CRM rejected the lead", res.status, out.reason || "");
+      return false;
+    }
+    console.log("[gtv-lead] CRM", out.returning ? "updated existing lead" : "created lead", out.id || "");
+    return true;
+  } catch (err) {
+    // Never fail the visitor's request because the CRM is slow. The Supabase copy still has the lead.
+    console.error("[gtv-lead] CRM request failed", err);
+    return false;
   }
 }
