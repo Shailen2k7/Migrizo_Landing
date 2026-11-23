@@ -7,9 +7,9 @@ import { QUALIFY_THRESHOLD } from "@/lib/gtv-scoring";
 
 const CONFIG = {
   /** Calendly / Cal.com / HubSpot meetings link for the free strategy call. */
-  bookingUrl: "https://calendly.com/[PLACEHOLDER]/global-talent-strategy-call",
+  bookingUrl: "https://crm.migrizo.com/book/shailen",
   /** WhatsApp number in international format, digits only, no + or spaces. */
-  whatsappNumber: "91XXXXXXXXXX", // [PLACEHOLDER]
+  whatsappNumber: "447887348822",
   /** Pre-filled WhatsApp message. */
   whatsappMessage: "Hi Migrizo, I would like to know if I qualify for the UK Global Talent Visa.",
   /**
